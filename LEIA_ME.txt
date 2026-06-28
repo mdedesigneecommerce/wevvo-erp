@@ -1,0 +1,19 @@
+Correções da versão v4:
+
+1. Rastrear lote automático de Produto Acabado:
+   - Agora a rota /lote/<lote> aceita lote criado por ajuste/estoque inicial e lote de produção normal.
+   - O botão Rastrear mostra os dados usando producao ou estoque_produto_acabado.
+
+2. Imprimir etiqueta do lote automático:
+   - Agora /rotulo_lote/<lote> também aceita lote criado por estoque inicial.
+   - Corrigido erro SQL com ORDER BY duplicado.
+
+3. Saídas/Vendas:
+   - Criada a função carregarLotesParaSaida() que estava faltando no HTML.
+   - O combo Produto/Lote passa a carregar os lotes com saldo.
+
+Como atualizar:
+- Substitua o app.py do projeto por este app.py.
+- Substitua templates/index.html por este templates/index.html.
+- Pare o servidor Flask e inicie novamente: python app.py
+- No navegador, use Ctrl + F5 para limpar cache.
