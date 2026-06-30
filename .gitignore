@@ -1,21 +1,23 @@
-# Ambiente local
+# Ambiente Python
 .venv/
 venv/
 __pycache__/
 *.py[cod]
 *$py.class
 
-# Banco e arquivos locais sensíveis
-*.db
+# Banco local e backups
+sistema.db
+*.db-journal
 *.sqlite
 *.sqlite3
+backups/
 
-# Sistema operacional / editor
+# Arquivos temporários do sistema operacional/editores
 .DS_Store
 Thumbs.db
-.vscode/
+.vscode/.ropeproject
 
-# Arquivos temporários de diagnóstico local
+# Relatórios locais gerados para auditoria
 estrutura_projeto.txt
 estrutura_ascii.txt
 inventario_funcoes.txt
