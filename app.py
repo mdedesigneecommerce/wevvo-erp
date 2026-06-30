@@ -37,6 +37,7 @@ from routes.categorias_routes import categorias_bp
 from routes.configuracoes_routes import configuracoes_bp
 from routes.usuarios_routes import usuarios_bp
 from routes.home_routes import home_bp
+from routes.busca_routes import busca_bp
 
 app = Flask(__name__)
 app.register_blueprint(dashboard_bp)
@@ -44,6 +45,7 @@ app.register_blueprint(categorias_bp)
 app.register_blueprint(configuracoes_bp)
 app.register_blueprint(usuarios_bp)
 app.register_blueprint(home_bp)
+app.register_blueprint(busca_bp)
 
 
 def hoje_brasilia():
@@ -2495,145 +2497,6 @@ def sincronizar_ingredientes_tecnicos_usados_na_receita(cursor, receita_id):
         recalcular_receitas_salvas(cursor, int(receita_base["id"]))
         atualizar_ingrediente_tecnico_da_receita(cursor, int(receita_base["id"]), receita_base["nome"], {})
 
-
-
-@app.route("/buscar")
-def buscar():
-    termo = request.args.get("q", "").strip()
-
-    if len(termo) < 1:
-        return jsonify([])
-
-    conn = conectar_banco()
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT
-            id,
-            nome,
-            preco_kg,
-            unidade,
-            calorias_100g,
-            carboidratos_100g,
-            proteinas_100g,
-            gorduras_100g,
-            sodio_100g,
-            fonte_nutricional,
-            taco_match_nome,
-            taco_match_similaridade
-        FROM ingredientes
-        WHERE COALESCE(fonte_nutricional, '') <> 'RECEITA_TECNICA'
-        ORDER BY nome ASC
-    """)
-
-    termo_normalizado = normalizar_busca(termo)
-
-    def prioridade_busca(item):
-        nome_normalizado = normalizar_busca(item["nome"])
-        palavras = nome_normalizado.split()
-        if nome_normalizado.startswith(termo_normalizado):
-            prioridade = 0
-        elif any(palavra.startswith(termo_normalizado) for palavra in palavras):
-            prioridade = 1
-        else:
-            prioridade = 2
-        return (prioridade, nome_normalizado)
-
-    linhas_filtradas = [
-        item for item in cursor.fetchall()
-        if termo_normalizado in normalizar_busca(item["nome"])
-        and not parece_prato_montado(item["nome"])
-    ]
-    linhas = sorted(linhas_filtradas, key=prioridade_busca)[:50]
-    conn.close()
-
-    return jsonify([
-        {
-            "id": item["id"],
-            "nome": item["nome"],
-            "preco_kg": item["preco_kg"],
-            "preco": item["preco_kg"],
-            "unidade": item["unidade"],
-            "calorias_100g": item["calorias_100g"],
-            "carboidratos_100g": item["carboidratos_100g"],
-            "proteinas_100g": item["proteinas_100g"],
-            "gorduras_100g": item["gorduras_100g"],
-            "sodio_100g": item["sodio_100g"],
-            "fonte_nutricional": item["fonte_nutricional"],
-            "taco_match_nome": item["taco_match_nome"],
-            "taco_match_similaridade": item["taco_match_similaridade"]
-        }
-        for item in linhas
-    ])
-
-
-@app.route("/sugerir_nutriente_ingrediente")
-def sugerir_nutriente_ingrediente():
-    nome = request.args.get("q", "").strip()
-    if not nome:
-        return jsonify({"status": "erro", "mensagem": "Informe o nome do ingrediente."}), 400
-
-    campos_nutri = [
-        "calorias_100g",
-        "carboidratos_100g",
-        "acucares_totais_100g",
-        "acucares_adicionados_100g",
-        "proteinas_100g",
-        "gorduras_100g",
-        "gorduras_saturadas_100g",
-        "gorduras_trans_100g",
-        "fibra_alimentar_100g",
-        "sodio_100g"
-    ]
-
-    complemento = nutrientes_complementares(nome)
-    if complemento:
-        return jsonify({
-            "status": "sucesso",
-            "fonte": complemento["base"],
-            "similaridade": 100,
-            "nutrientes": dict(zip(campos_nutri, complemento["valores"]))
-        })
-
-    conn = conectar_banco()
-    cursor = conn.cursor()
-    condicao_com_nutri = " OR ".join([f"COALESCE({campo}, 0) > 0" for campo in campos_nutri])
-    cursor.execute(f"""
-        SELECT id, nome, fonte_nutricional, taco_match_nome, {", ".join(campos_nutri)}
-        FROM ingredientes
-        WHERE ({condicao_com_nutri})
-        ORDER BY
-            CASE
-                WHEN COALESCE(fonte_nutricional, '') LIKE '%TACO%' THEN 0
-                WHEN COALESCE(taco_match_nome, '') <> '' THEN 1
-                WHEN COALESCE(fonte_nutricional, '') = 'RECEITA_TECNICA' THEN 2
-                ELSE 3
-            END,
-            nome ASC
-    """)
-    bases = [dict(linha) for linha in cursor.fetchall()]
-    conn.close()
-
-    melhor = None
-    melhor_score = 0.0
-    for base in bases:
-        score = similaridade_nutricional(nome, base["nome"])
-        if score > melhor_score:
-            melhor_score = score
-            melhor = base
-
-    if not melhor or melhor_score < 0.42:
-        return jsonify({
-            "status": "erro",
-            "mensagem": "Não encontrei uma base nutricional parecida com segurança."
-        }), 404
-
-    return jsonify({
-        "status": "sucesso",
-        "fonte": melhor["taco_match_nome"] or melhor["nome"],
-        "similaridade": round(melhor_score * 100, 1),
-        "nutrientes": {campo: melhor[campo] for campo in campos_nutri}
-    })
 
 
 @app.route("/ingredientes_precos")
