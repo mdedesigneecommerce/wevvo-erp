@@ -17,7 +17,7 @@ from datetime import timedelta
 from flask import Blueprint, jsonify, request
 
 from config import BANCO
-from services.core import agora_brasilia, data_brasil, data_brasilia_obj
+from services.core import agora_brasilia, data_brasil, data_brasilia_obj, normalizar_float
 
 
 estoque_bp = Blueprint("estoque", __name__)
@@ -249,3 +249,252 @@ def listar_movimentacoes_produto_acabado():
     linhas = cursor.fetchall()
     conn.close()
     return jsonify([dict(item) for item in linhas])
+
+@estoque_bp.route("/movimentar_estoque", methods=["POST"])
+def movimentar_estoque():
+    dados = request.json or {}
+
+    ingrediente_id = dados.get("ingrediente_id")
+    tipo = str(dados.get("tipo", "")).upper().strip()
+    quantidade = float(dados.get("quantidade", 0))
+    observacao = dados.get("observacao", "").strip()
+
+    if not ingrediente_id:
+        return jsonify({"status": "erro", "mensagem": "Ingrediente inválido"}), 400
+
+    if tipo not in ["ENTRADA", "SAIDA", "AJUSTE"]:
+        return jsonify({"status": "erro", "mensagem": "Tipo de movimentação inválido"}), 400
+
+    if quantidade < 0:
+        return jsonify({"status": "erro", "mensagem": "Quantidade não pode ser negativa"}), 400
+
+    conn = conectar_banco()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT id, nome, unidade, estoque_atual
+        FROM ingredientes
+        WHERE id = ?
+    """, (int(ingrediente_id),))
+
+    ingrediente = cursor.fetchone()
+
+    if not ingrediente:
+        conn.close()
+        return jsonify({"status": "erro", "mensagem": "Ingrediente não encontrado"}), 404
+
+    estoque_atual = float(ingrediente["estoque_atual"])
+
+    if tipo == "ENTRADA":
+        novo_estoque = estoque_atual + quantidade
+    elif tipo == "SAIDA":
+        if quantidade > estoque_atual:
+            conn.close()
+            return jsonify({"status": "erro", "mensagem": "Saldo insuficiente em estoque"}), 400
+        novo_estoque = estoque_atual - quantidade
+    else:
+        novo_estoque = quantidade
+
+    cursor.execute("""
+        UPDATE ingredientes
+        SET estoque_atual = ?,
+            updated_at = ?
+        WHERE id = ?
+    """, (novo_estoque, agora_brasilia(), int(ingrediente_id)))
+
+    cursor.execute("""
+        INSERT INTO movimentacoes_estoque (
+            ingrediente_id,
+            ingrediente_nome,
+            tipo,
+            quantidade,
+            unidade,
+            observacao,
+            created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (
+        int(ingrediente_id),
+        ingrediente["nome"],
+        tipo,
+        quantidade,
+        ingrediente["unidade"],
+        observacao,
+        agora_brasilia()
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        "status": "sucesso",
+        "estoque_atual": novo_estoque
+    })
+
+
+@estoque_bp.route("/atualizar_estoque_minimo", methods=["POST"])
+def atualizar_estoque_minimo():
+    dados = request.json or {}
+
+    ingrediente_id = dados.get("id")
+    estoque_minimo = normalizar_float(dados.get("estoque_minimo", 0), 0)
+
+    if not ingrediente_id:
+        return jsonify({"status": "erro", "mensagem": "Ingrediente inválido"}), 400
+
+    if estoque_minimo < 0:
+        return jsonify({"status": "erro", "mensagem": "Estoque mínimo não pode ser negativo"}), 400
+
+    conn = conectar_banco()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT nome, unidade
+        FROM ingredientes
+        WHERE id = ?
+    """, (int(ingrediente_id),))
+
+    ingrediente = cursor.fetchone()
+
+    if not ingrediente:
+        conn.close()
+        return jsonify({"status": "erro", "mensagem": "Ingrediente não encontrado"}), 404
+
+    cursor.execute("""
+        UPDATE ingredientes
+        SET estoque_minimo = ?,
+            updated_at = ?
+        WHERE id = ?
+    """, (estoque_minimo, agora_brasilia(), int(ingrediente_id)))
+
+    cursor.execute("""
+        INSERT INTO movimentacoes_estoque (
+            ingrediente_id,
+            ingrediente_nome,
+            tipo,
+            quantidade,
+            unidade,
+            observacao,
+            created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (
+        int(ingrediente_id),
+        ingrediente["nome"],
+        "MINIMO",
+        estoque_minimo,
+        ingrediente["unidade"],
+        "Estoque mínimo definido",
+        agora_brasilia()
+    ))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        "status": "sucesso",
+        "estoque_minimo": estoque_minimo,
+        "updated_at": agora_brasilia()
+    })
+
+
+@estoque_bp.route("/movimentar_produto_final_estoque", methods=["POST"])
+def movimentar_produto_final_estoque():
+    dados = request.json or {}
+
+    produto_id = dados.get("id")
+    tipo = str(dados.get("tipo", "")).upper().strip()
+    quantidade = normalizar_float(dados.get("quantidade", 0), 0)
+    observacao = str(dados.get("observacao", "")).strip()
+
+    if not produto_id:
+        return jsonify({"status": "erro", "mensagem": "Combo inválido"}), 400
+
+    if tipo not in ["ENTRADA", "SAIDA", "AJUSTE"]:
+        return jsonify({"status": "erro", "mensagem": "Tipo de movimentação inválido"}), 400
+
+    if quantidade < 0:
+        return jsonify({"status": "erro", "mensagem": "Quantidade não pode ser negativa"}), 400
+
+    conn = conectar_banco()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT id, nome, estoque_atual
+        FROM produtos_finais
+        WHERE id = ?
+    """, (int(produto_id),))
+    produto = cursor.fetchone()
+
+    if not produto:
+        conn.close()
+        return jsonify({"status": "erro", "mensagem": "Combo não encontrado"}), 404
+
+    estoque_atual = float(produto["estoque_atual"] or 0)
+
+    if tipo == "ENTRADA":
+        novo_estoque = estoque_atual + quantidade
+    elif tipo == "SAIDA":
+        if quantidade > estoque_atual:
+            conn.close()
+            return jsonify({"status": "erro", "mensagem": "Saldo insuficiente em estoque"}), 400
+        novo_estoque = estoque_atual - quantidade
+    else:
+        novo_estoque = quantidade
+
+    cursor.execute("""
+        UPDATE produtos_finais
+        SET estoque_atual = ?,
+            updated_at = ?
+        WHERE id = ?
+    """, (novo_estoque, agora_brasilia(), int(produto_id)))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        "status": "sucesso",
+        "estoque_atual": novo_estoque,
+        "observacao": observacao
+    })
+
+
+@estoque_bp.route("/atualizar_produto_final_estoque_minimo", methods=["POST"])
+def atualizar_produto_final_estoque_minimo():
+    dados = request.json or {}
+
+    produto_id = dados.get("id")
+    estoque_minimo = normalizar_float(dados.get("estoque_minimo", 0), 0)
+
+    if not produto_id:
+        return jsonify({"status": "erro", "mensagem": "Combo inválido"}), 400
+
+    if estoque_minimo < 0:
+        return jsonify({"status": "erro", "mensagem": "Estoque mínimo não pode ser negativo"}), 400
+
+    conn = conectar_banco()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id FROM produtos_finais WHERE id = ?", (int(produto_id),))
+    produto = cursor.fetchone()
+
+    if not produto:
+        conn.close()
+        return jsonify({"status": "erro", "mensagem": "Combo não encontrado"}), 404
+
+    cursor.execute("""
+        UPDATE produtos_finais
+        SET estoque_minimo = ?,
+            updated_at = ?
+        WHERE id = ?
+    """, (estoque_minimo, agora_brasilia(), int(produto_id)))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({
+        "status": "sucesso",
+        "estoque_minimo": estoque_minimo,
+        "updated_at": agora_brasilia()
+    })
+
