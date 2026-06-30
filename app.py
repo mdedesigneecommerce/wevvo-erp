@@ -36,12 +36,14 @@ from routes.dashboard_routes import dashboard_bp
 from routes.categorias_routes import categorias_bp
 from routes.configuracoes_routes import configuracoes_bp
 from routes.usuarios_routes import usuarios_bp
+from routes.home_routes import home_bp
 
 app = Flask(__name__)
 app.register_blueprint(dashboard_bp)
 app.register_blueprint(categorias_bp)
 app.register_blueprint(configuracoes_bp)
 app.register_blueprint(usuarios_bp)
+app.register_blueprint(home_bp)
 
 
 def hoje_brasilia():
@@ -2408,76 +2410,6 @@ iniciar_sistema()
 
 
 
-
-
-@app.route("/")
-def index():
-    conn = conectar_banco()
-    cursor = conn.cursor()
-
-    # Garante que a tela inicial sempre mostre receitas atualizadas
-    # com base nos preços e unidades atuais dos ingredientes.
-    recalcular_receitas_salvas(cursor)
-    conn.commit()
-
-    cursor.execute("""
-        SELECT id, nome, rendimento, custo_total, preco_venda, categoria_id, categoria_nome
-        FROM receitas
-        WHERE LOWER(COALESCE(nome, '')) NOT LIKE '%combo%'
-          AND LOWER(COALESCE(categoria_nome, '')) NOT LIKE '%combo%'
-          AND LOWER(COALESCE(categoria_produto, '')) NOT LIKE '%combo%'
-        ORDER BY id DESC
-    """)
-
-    receitas_salvas = cursor.fetchall()
-    conn.close()
-
-    return render_template("index.html", receitas_salvas=receitas_salvas)
-
-
-@app.route("/receitas_salvas")
-def receitas_salvas_json():
-    tipo = request.args.get("tipo", "receita").strip().lower()
-    conn = conectar_banco()
-    cursor = conn.cursor()
-
-    recalcular_receitas_salvas(cursor)
-    conn.commit()
-
-    filtro_combo = """
-        LOWER(COALESCE(nome, '')) LIKE '%combo%'
-        OR LOWER(COALESCE(categoria_nome, '')) LIKE '%combo%'
-        OR LOWER(COALESCE(categoria_produto, '')) LIKE '%combo%'
-    """
-
-    where = f"WHERE NOT ({filtro_combo})"
-    if tipo == "combo":
-        where = f"WHERE ({filtro_combo})"
-    elif tipo in ["todas", "todos"]:
-        where = ""
-
-    cursor.execute(f"""
-        SELECT id, nome, rendimento, custo_total, preco_venda, categoria_id, categoria_nome
-        FROM receitas
-        {where}
-        ORDER BY id DESC
-    """)
-
-    receitas = cursor.fetchall()
-    conn.close()
-
-    return jsonify([
-        {
-            "id": item["id"],
-            "nome": item["nome"],
-            "rendimento": item["rendimento"],
-            "custo_total": item["custo_total"],
-            "preco_venda": item["preco_venda"],
-            "categoria_id": item["categoria_id"],
-            "categoria_nome": item["categoria_nome"] or "Sem categoria"
-        }
-        for item in receitas
-    ])
 
 
 def montar_detalhamento_combo_cozinha(cursor, receita_id, itens_combo):
