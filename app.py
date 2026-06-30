@@ -2503,7 +2503,6 @@ def sincronizar_ingredientes_tecnicos_usados_na_receita(cursor, receita_id):
 
 
 
-@app.route("/ingredientes_precos")
 def ingredientes_precos():
     termo = request.args.get("q", "").strip()
 
@@ -2541,7 +2540,6 @@ def ingredientes_precos():
     ])
 
 
-@app.route("/ingredientes_admin")
 def ingredientes_admin():
     termo = request.args.get("q", "").strip()
     excluir_tecnicos = request.args.get("excluir_tecnicos", "0") == "1"
@@ -2579,7 +2577,6 @@ def ingredientes_admin():
     return jsonify([montar_ingrediente_admin(item) for item in linhas])
 
 
-@app.route("/ingrediente_admin/<int:ingrediente_id>")
 def ingrediente_admin_detalhe(ingrediente_id):
     conn = conectar_banco()
     cursor = conn.cursor()
@@ -2604,7 +2601,6 @@ def ingrediente_admin_detalhe(ingrediente_id):
     return jsonify({"status": "sucesso", "ingrediente": montar_ingrediente_admin(ingrediente)})
 
 
-@app.route("/salvar_ingrediente_admin", methods=["POST"])
 def salvar_ingrediente_admin():
     dados = request.json or {}
 
@@ -2769,7 +2765,6 @@ def salvar_ingrediente_admin():
     })
 
 
-@app.route("/excluir_ingrediente/<int:ingrediente_id>", methods=["DELETE"])
 def excluir_ingrediente_admin(ingrediente_id):
     conn = conectar_banco()
     cursor = conn.cursor()
@@ -2795,7 +2790,6 @@ def excluir_ingrediente_admin(ingrediente_id):
     return jsonify({"status": "sucesso"})
 
 
-@app.route("/atualizar_preco_ingrediente", methods=["POST"])
 def atualizar_preco_ingrediente():
     dados = request.json or {}
 
@@ -2833,7 +2827,6 @@ def atualizar_preco_ingrediente():
     return jsonify({"status": "sucesso", "receitas_recalculadas": receitas_recalculadas})
 
 
-@app.route("/reajustar_preco_ingrediente", methods=["POST"])
 def reajustar_preco_ingrediente():
     dados = request.json or {}
 
@@ -3030,7 +3023,6 @@ def recalcular_receitas():
     return jsonify({"status": "sucesso", "receitas_recalculadas": receitas_recalculadas})
 
 
-@app.route("/cadastrar_ingrediente", methods=["POST"])
 def cadastrar_ingrediente():
     dados = request.json or {}
 
