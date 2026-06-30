@@ -760,4 +760,23 @@ def dashboard_inteligencia():
     })
 
 
+@dashboard_bp.route('/api/dashboard_executivo_integrado')
+def api_dashboard_executivo_integrado():
+    """API consolidada do dashboard executivo.
+
+    Mantém o mesmo contrato JSON anteriormente servido pelo app.py.
+    A inicialização do banco continua ocorrendo no startup do app, preservando
+    compatibilidade sem criar dependência circular com criar_tabelas().
+    """
+    dashboard = gerar_dashboard_executivo(BANCO)
+    return jsonify(dashboard)
+
+
+@dashboard_bp.route('/api/dashboard_inteligente_erp')
+def api_dashboard_inteligente_erp():
+    """Alias compatível para o dashboard inteligente do ERP."""
+    dashboard = gerar_dashboard_executivo(BANCO)
+    return jsonify(dashboard)
+
+
 __all__ = ['dashboard_bp']

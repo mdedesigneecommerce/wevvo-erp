@@ -30,7 +30,6 @@ from services.core import (
 )
 from services.automacoes import registrar_evento_automacao, avaliar_nivel_estoque
 from services.erp_motor import executar_motor_central
-from services.dashboard_service import gerar_dashboard_executivo
 from services.financeiro_service import gerar_financeiro_integrado
 from routes.dashboard_routes import dashboard_bp
 from routes.categorias_routes import categorias_bp
@@ -7647,19 +7646,6 @@ def api_relatorios_setor(setor):
     finally:
         conn.close()
 
-
-@app.route('/api/dashboard_executivo_integrado')
-def api_dashboard_executivo_integrado():
-    criar_tabelas()
-    dashboard = gerar_dashboard_executivo(BANCO)
-    return jsonify(dashboard)
-
-
-@app.route('/api/dashboard_inteligente_erp')
-def api_dashboard_inteligente_erp():
-    criar_tabelas()
-    dashboard = gerar_dashboard_executivo(BANCO)
-    return jsonify(dashboard)
 
 
 # Etapa seguinte: cadastros auxiliares com dados próprios por submenu.
