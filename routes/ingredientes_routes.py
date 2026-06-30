@@ -163,3 +163,46 @@ def ingrediente_admin_detalhe(ingrediente_id):
         return jsonify({"status": "erro", "mensagem": "Ingrediente nao encontrado."}), 404
 
     return jsonify({"status": "sucesso", "ingrediente": montar_ingrediente_admin(ingrediente)})
+
+
+# -----------------------------------------------------------------------------
+# Sprint 12 — Rotas de manutenção de ingredientes
+# -----------------------------------------------------------------------------
+# Estas rotas preservam os contratos atuais e delegam a execução para as funções
+# já consolidadas no app.py. A estratégia reduz risco nesta etapa: o Blueprint
+# assume os endpoints enquanto a regra de negócio original continua intacta.
+# Em uma sprint posterior, a regra será movida para services/ingredientes_service.py.
+
+
+def _delegar_para_app(nome_funcao):
+    from app import __dict__ as app_dict
+    funcao = app_dict.get(nome_funcao)
+    if funcao is None:
+        return jsonify({"status": "erro", "mensagem": f"Função {nome_funcao} não encontrada no app.py"}), 500
+    return funcao()
+
+
+@ingredientes_bp.route("/salvar_ingrediente_admin", methods=["POST"])
+def salvar_ingrediente_admin():
+    return _delegar_para_app("salvar_ingrediente_admin")
+
+
+@ingredientes_bp.route("/excluir_ingrediente/<int:ingrediente_id>", methods=["DELETE"])
+def excluir_ingrediente_admin(ingrediente_id):
+    from app import excluir_ingrediente_admin as original
+    return original(ingrediente_id)
+
+
+@ingredientes_bp.route("/atualizar_preco_ingrediente", methods=["POST"])
+def atualizar_preco_ingrediente():
+    return _delegar_para_app("atualizar_preco_ingrediente")
+
+
+@ingredientes_bp.route("/reajustar_preco_ingrediente", methods=["POST"])
+def reajustar_preco_ingrediente():
+    return _delegar_para_app("reajustar_preco_ingrediente")
+
+
+@ingredientes_bp.route("/cadastrar_ingrediente", methods=["POST"])
+def cadastrar_ingrediente():
+    return _delegar_para_app("cadastrar_ingrediente")
