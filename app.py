@@ -38,6 +38,7 @@ from routes.configuracoes_routes import configuracoes_bp
 from routes.usuarios_routes import usuarios_bp
 from routes.home_routes import home_bp
 from routes.busca_routes import busca_bp
+from routes.ingredientes_routes import ingredientes_bp
 
 app = Flask(__name__)
 app.register_blueprint(dashboard_bp)
@@ -46,6 +47,7 @@ app.register_blueprint(configuracoes_bp)
 app.register_blueprint(usuarios_bp)
 app.register_blueprint(home_bp)
 app.register_blueprint(busca_bp)
+app.register_blueprint(ingredientes_bp)
 
 
 def hoje_brasilia():
