@@ -35,11 +35,13 @@ from services.financeiro_service import gerar_financeiro_integrado
 from routes.dashboard_routes import dashboard_bp
 from routes.categorias_routes import categorias_bp
 from routes.configuracoes_routes import configuracoes_bp
+from routes.usuarios_routes import usuarios_bp
 
 app = Flask(__name__)
 app.register_blueprint(dashboard_bp)
 app.register_blueprint(categorias_bp)
 app.register_blueprint(configuracoes_bp)
+app.register_blueprint(usuarios_bp)
 
 
 def hoje_brasilia():
@@ -8656,119 +8658,6 @@ def api_configuracoes_sistema_post():
 
 
 
-
-def _usuario_sistema_dict(row):
-    if not row:
-        return {}
-    dados = dict(row)
-    dados.pop('senha_hash', None)
-    return dados
-
-
-@app.route('/api/usuarios_sistema', methods=['GET'])
-def api_usuarios_sistema_listar():
-    criar_tabelas()
-    conn = conectar_banco(); cursor = conn.cursor()
-    try:
-        rows = cursor.execute("""
-            SELECT id, usuario, email, perfil, status, permissoes, observacao, ultimo_acesso, created_at, updated_at
-            FROM usuarios_sistema
-            ORDER BY CASE WHEN usuario='administrador' THEN 0 ELSE 1 END, usuario COLLATE NOCASE
-        """).fetchall()
-        return jsonify({'status': 'sucesso', 'usuarios': [_usuario_sistema_dict(r) for r in rows]})
-    finally:
-        conn.close()
-
-
-@app.route('/api/usuarios_sistema', methods=['POST'])
-def api_usuarios_sistema_salvar():
-    criar_tabelas()
-    dados = request.get_json(silent=True) or request.form.to_dict() or {}
-    usuario = (dados.get('usuario') or '').strip()
-    email = (dados.get('email') or '').strip()
-    perfil = (dados.get('perfil') or 'Operador').strip() or 'Operador'
-    status = (dados.get('status') or 'Ativo').strip() or 'Ativo'
-    permissoes = (dados.get('permissoes') or '').strip() or ('todos' if perfil.lower() == 'administrador' else '')
-    observacao = (dados.get('observacao') or '').strip()
-    senha = (dados.get('senha') or '').strip()
-    usuario_id = dados.get('id')
-    if not usuario:
-        return jsonify({'status': 'erro', 'mensagem': 'Informe o usuário.'}), 400
-    conn = conectar_banco(); cursor = conn.cursor()
-    try:
-        senha_hash = generate_password_hash(senha) if senha else None
-        if usuario_id:
-            existente = cursor.execute('SELECT id, usuario FROM usuarios_sistema WHERE id=?', (usuario_id,)).fetchone()
-            if not existente:
-                return jsonify({'status': 'erro', 'mensagem': 'Usuário não encontrado.'}), 404
-            conflito = cursor.execute('SELECT id FROM usuarios_sistema WHERE usuario=? AND id<>?', (usuario, usuario_id)).fetchone()
-            if conflito:
-                return jsonify({'status': 'erro', 'mensagem': 'Já existe outro usuário com este nome.'}), 400
-            if senha_hash:
-                cursor.execute("""
-                    UPDATE usuarios_sistema
-                    SET usuario=?, email=?, perfil=?, status=?, permissoes=?, observacao=?, senha_hash=?, updated_at=?
-                    WHERE id=?
-                """, (usuario, email, perfil, status, permissoes, observacao, senha_hash, agora_brasilia(), usuario_id))
-            else:
-                cursor.execute("""
-                    UPDATE usuarios_sistema
-                    SET usuario=?, email=?, perfil=?, status=?, permissoes=?, observacao=?, updated_at=?
-                    WHERE id=?
-                """, (usuario, email, perfil, status, permissoes, observacao, agora_brasilia(), usuario_id))
-        else:
-            cursor.execute("""
-                INSERT INTO usuarios_sistema (usuario, email, senha_hash, perfil, status, permissoes, observacao, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (usuario, email, senha_hash, perfil, status, permissoes, observacao, agora_brasilia(), agora_brasilia()))
-        conn.commit()
-        return jsonify({'status': 'sucesso', 'mensagem': 'Usuário salvo com sucesso.'})
-    except sqlite3.IntegrityError:
-        conn.rollback()
-        return jsonify({'status': 'erro', 'mensagem': 'Usuário já cadastrado.'}), 400
-    finally:
-        conn.close()
-
-
-@app.route('/api/usuarios_sistema/<int:usuario_id>/status', methods=['POST'])
-def api_usuarios_sistema_status(usuario_id):
-    criar_tabelas()
-    dados = request.get_json(silent=True) or request.form.to_dict() or {}
-    novo_status = (dados.get('status') or '').strip() or 'Inativo'
-    conn = conectar_banco(); cursor = conn.cursor()
-    try:
-        row = cursor.execute('SELECT usuario FROM usuarios_sistema WHERE id=?', (usuario_id,)).fetchone()
-        if not row:
-            return jsonify({'status': 'erro', 'mensagem': 'Usuário não encontrado.'}), 404
-        if row['usuario'] == 'administrador' and novo_status != 'Ativo':
-            return jsonify({'status': 'erro', 'mensagem': 'O administrador principal não pode ser inativado.'}), 400
-        cursor.execute('UPDATE usuarios_sistema SET status=?, updated_at=? WHERE id=?', (novo_status, agora_brasilia(), usuario_id))
-        conn.commit()
-        return jsonify({'status': 'sucesso', 'mensagem': 'Status atualizado.'})
-    finally:
-        conn.close()
-
-
-@app.route('/api/login_sistema', methods=['POST'])
-def api_login_sistema():
-    """Validação de login para uso futuro sem bloquear o ERP nesta etapa incremental."""
-    criar_tabelas()
-    dados = request.get_json(silent=True) or request.form.to_dict() or {}
-    usuario = (dados.get('usuario') or '').strip()
-    senha = (dados.get('senha') or '').strip()
-    conn = conectar_banco(); cursor = conn.cursor()
-    try:
-        row = cursor.execute('SELECT * FROM usuarios_sistema WHERE usuario=? AND status="Ativo"', (usuario,)).fetchone()
-        if not row:
-            return jsonify({'status': 'erro', 'mensagem': 'Usuário não encontrado ou inativo.'}), 401
-        senha_hash = row['senha_hash'] if 'senha_hash' in row.keys() else None
-        if senha_hash and not check_password_hash(senha_hash, senha):
-            return jsonify({'status': 'erro', 'mensagem': 'Senha inválida.'}), 401
-        cursor.execute('UPDATE usuarios_sistema SET ultimo_acesso=?, updated_at=? WHERE id=?', (agora_brasilia(), agora_brasilia(), row['id']))
-        conn.commit()
-        return jsonify({'status': 'sucesso', 'usuario': _usuario_sistema_dict(row)})
-    finally:
-        conn.close()
 
 
 @app.route('/api/backup_erp')
