@@ -167,7 +167,7 @@ def estoque_ingredientes():
             "preco": item["preco_kg"],
             "estoque_atual": item["estoque_atual"],
             "estoque_minimo": item["estoque_minimo"],
-            "status": "BAIXO" if item["estoque_atual"] <= item["estoque_minimo"] else "OK"
+            "status": "BAIXO" if float(item["estoque_minimo"] or 0) > 0 and float(item["estoque_atual"] or 0) <= float(item["estoque_minimo"] or 0) else "OK"
         }
         for item in linhas
     ])
@@ -223,11 +223,16 @@ def estoque_produto_acabado():
         SELECT e.id, e.produto_final_id, e.produto_final_nome, e.receita_nome, e.lote,
                e.quantidade_produzida, e.saldo_atual, e.data_fabricacao,
                e.data_validade, e.observacao, e.created_at,
-               COALESCE(pf.preco_venda, 0) AS preco_venda
+               COALESCE(pf.preco_venda, 0) AS preco_venda,
+               CASE
+                   WHEN pf.id IS NULL AND e.produto_final_id IS NOT NULL THEN 'Órfão'
+                   WHEN COALESCE(pf.ativo, 1) = 1 THEN 'Ativo'
+                   ELSE 'Inativo'
+               END AS status_vinculo
         FROM estoque_produto_acabado e
-        INNER JOIN produtos_finais pf ON pf.id = e.produto_final_id
-        WHERE COALESCE(pf.ativo, 1) = 1
-          AND e.saldo_atual > 0
+        LEFT JOIN produtos_finais pf ON pf.id = e.produto_final_id
+        WHERE COALESCE(e.saldo_atual, 0) > 0
+          AND (pf.id IS NULL OR COALESCE(pf.ativo, 1) = 1)
         ORDER BY e.id DESC
         LIMIT 150
     """)

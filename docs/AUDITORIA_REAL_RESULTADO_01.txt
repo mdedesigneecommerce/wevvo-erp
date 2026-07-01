@@ -1,0 +1,13 @@
+OK  - app.py encontrado
+OK  - pytest listado em requirements.txt
+OK  - regra de estoque baixo exige estoque_minimo > 0
+OK  - rastreabilidade lê estoque_produto_acabado com LEFT JOIN
+INFO - lotes com saldo em estoque_produto_acabado: 4
+INFO - lotes visíveis pela regra antiga com INNER JOIN: 0
+INFO - ingredientes que seriam falsamente 'baixos' se mínimo zero contasse: 791
+INFO - usuários sem senha hash: 1
+OK  - auditoria confirmou que a correção precisa preservar lotes sem produto vinculado
+OK  - auditoria confirmou caso real de mínimo zero no banco
+AVISO - login existe, mas ainda não deve ser tratado como segurança real
+
+AUDITORIA REAL CONCLUÍDA COM SUCESSO
